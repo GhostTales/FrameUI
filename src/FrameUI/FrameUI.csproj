@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>FrameUI</AssemblyName>
+    <RootNamespace>FrameUI</RootNamespace>
+    <Description>Figma-style frame UI for the stripped IMGUI of Hell Clock</Description>
+    <Version>1.0.0</Version>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FrameUI.Tests" />
+  </ItemGroup>
+
+</Project>

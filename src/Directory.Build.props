@@ -1,0 +1,32 @@
+<Project>
+
+  <!-- The library compiles against the game's own (stripped) Unity assemblies, so it can only use IMGUI calls that
+       exist at runtime. Override with: dotnet build -p:GameManagedDir=/path/to/Hell Clock_Data/Managed -->
+  <PropertyGroup>
+    <GameManagedDir Condition="'$(GameManagedDir)' == ''">$(HOME)/.local/share/Steam/steamapps/common/Hell Clock/Hell Clock_Data/Managed</GameManagedDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(GameManagedDir)/UnityEngine.CoreModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(GameManagedDir)/UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(GameManagedDir)/UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="UnityEngine.ImageConversionModule">
+      <HintPath>$(GameManagedDir)/UnityEngine.ImageConversionModule.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="CheckGameManagedDir" BeforeTargets="ResolveAssemblyReferences" Condition="!Exists('$(GameManagedDir)/UnityEngine.IMGUIModule.dll')">
+    <Error Text="Game assemblies not found in '$(GameManagedDir)'. Pass -p:GameManagedDir=&lt;path to Hell Clock_Data/Managed&gt;." />
+  </Target>
+
+</Project>
