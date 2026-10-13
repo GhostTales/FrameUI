@@ -55,7 +55,10 @@ root.Render(new Rect(0f, 0f, window.Rect.width, window.Rect.height)); // on ever
 - **Look**: `Fill`, `Border` (per side via `BorderLeft` ...), `BorderWidths`, `CornerRadii`, `Tint`.
 - **Interaction**: `Clicked`, `Hovered`, and `Hover*` / `Pressed*` overrides for tint, fill and border. `Tint` is
   inherited by all descendants.
-- **Windows**: `FigmaWindow` wraps `GUI.Window` and can be resizable and follow its content size (`FitTo`).
+- **Windows**: `FigmaWindow` wraps `GUI.Window` and can be resizable and follow its content size (`FitTo`). It also
+  blocks click-through: while the pointer is over a rendered window, the game's `EventSystem` reports the pointer as over
+  UI and raycasts return nothing, so clicks don't reach the game behind it (Harmony patches, installed automatically;
+  call `Destroy()` when a window is no longer used).
 - **Icons**: `Gui.Icon("Name.png")` loads `Textures.Name.png` embedded in the calling assembly.
   Use `<EmbeddedResource Include="Textures/*.png" LogicalName="Textures.%(Filename)%(Extension)" />`.
 - **Settings**: `Gui.LinearTextFix` (text colour correction for the game's linear colour space), `Gui.Warn` (log hook),

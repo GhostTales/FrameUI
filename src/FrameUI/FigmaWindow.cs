@@ -16,6 +16,8 @@ namespace FrameUI
         Rect _resizeStartRect;
         Vector2? _pendingFit;
 
+        internal int LastRenderFrame { get; private set; } = -1;
+
         public Rect Rect { get; private set; }
         /// <summary>Lets the window be resized by dragging within ResizeGrip of any of its corners.</summary>
         public bool Resizable { get; set; }
@@ -32,7 +34,11 @@ namespace FrameUI
             Rect = initialRect;
             _minimumSize = minimumSize;
             _draw = draw;
+            ClickThrough.Register(this);
         }
+
+        /// <summary>Stops the window from blocking clicks. Call when the window is no longer used.</summary>
+        public void Destroy() => ClickThrough.Unregister(this);
 
         public void SetSize(float width, float height)
         {
@@ -53,6 +59,7 @@ namespace FrameUI
 
         public void Render()
         {
+            LastRenderFrame = Time.frameCount;
             Resize();
 
             float maxWidth = Mathf.Max(_minimumSize.x, Screen.width);

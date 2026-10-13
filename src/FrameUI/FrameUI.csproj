@@ -10,6 +10,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Compile-only: BepInEx provides Harmony at runtime. -->
+    <PackageReference Include="HarmonyX" Version="2.10.2" PrivateAssets="all" ExcludeAssets="runtime" />
     <InternalsVisibleTo Include="FrameUI.Tests" />
   </ItemGroup>
 
