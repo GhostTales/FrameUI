@@ -9,12 +9,16 @@ namespace FrameUI
     /// <summary>A frame that draws a line of text on top of its own fill / border.</summary>
     public sealed class FigmaText : FigmaFrame
     {
+        /// <summary>The font used by text instances that do not provide an explicit font.</summary>
+        public static Font DefaultFont { get; set; }
+
         public string Text;
         readonly GUIStyle _style;
         readonly GUIContent _content = new GUIContent();
         Color _color;
 
         public int FontSize { get => _style.fontSize; set => _style.fontSize = value; }
+        public Font Font { get => _style.font; set => _style.font = value; }
         public Color Color { get => _color; set => _style.normal.textColor = Gui.TextColor(_color = value); }
         public TextAnchor Align { get => _style.alignment; set => _style.alignment = value; }
         public FontStyle FontStyle { get => _style.fontStyle; set => _style.fontStyle = value; }
@@ -27,13 +31,14 @@ namespace FrameUI
         {
             Text = text;
             _style = new GUIStyle(style);
+            if (_style.font == null) _style.font = DefaultFont;
             Color = style.normal.textColor;
         }
 
         public FigmaText(Rect bounds, string text, int fontSize, Color color, TextAnchor align = TextAnchor.UpperLeft) : base(bounds)
         {
             Text = text;
-            _style = new GUIStyle(GUI.skin.label) { fontSize = fontSize, alignment = align, wordWrap = false };
+            _style = new GUIStyle(GUI.skin.label) { font = DefaultFont ?? GUI.skin.label.font, fontSize = fontSize, alignment = align, wordWrap = false };
             Color = color;
         }
 
