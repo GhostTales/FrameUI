@@ -109,6 +109,15 @@ namespace FrameUI
             GUI.DrawTexture(r, White, ScaleMode.StretchToFill, true, 0f, c, Vector4.zero, radii);
         }
 
+        /// <summary>Hollow rounded border: only the ring is drawn, the inside stays untouched.</summary>
+        public static void RoundRing(Rect r, Color c, Vector4 radii, Vector4 widths)
+        {
+            if (r.width <= 0f || r.height <= 0f) return;
+            float max = Mathf.Min(r.width, r.height) * 0.5f;
+            radii = new Vector4(Mathf.Min(radii.x, max), Mathf.Min(radii.y, max), Mathf.Min(radii.z, max), Mathf.Min(radii.w, max));
+            GUI.DrawTexture(r, White, ScaleMode.StretchToFill, true, 0f, c, widths, radii);
+        }
+
         public static void Outline(Rect r, Color c, float width = 1f)
         {
             Round(new Rect(r.x, r.y, r.width, width), c, 0f);

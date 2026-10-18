@@ -212,7 +212,9 @@ namespace FrameUI
             if (baseColor.HasValue)
             {
                 // The border is the whole rectangle; the fill is painted over it, inset by the border widths.
-                Gui.Round(rect, baseColor.Value * tint, CornerRadii);
+                // Without a fill only the ring is drawn, so the inside stays see-through.
+                if (fill.HasValue) Gui.Round(rect, baseColor.Value * tint, CornerRadii);
+                else Gui.RoundRing(rect, baseColor.Value * tint, CornerRadii, b);
                 // Sides with their own colour are painted over the base, stopping short of the rounded corners.
                 var r = CornerRadii;
                 if (BorderTop.HasValue) Gui.Round(new Rect(rect.x + r.x, rect.y, rect.width - r.x - r.y, b.y), BorderTop.Value * tint, 0f);
