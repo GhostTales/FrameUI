@@ -21,6 +21,20 @@ namespace FrameUI
         /// </summary>
         public static bool LinearTextFix = true;
 
+        const float MinScale = 0.25f;
+        const float MaxScale = 4f;
+        static float _scale = 1f;
+
+        /// <summary>
+        /// Scales every FigmaWindow (layout, text, hit-testing and dragging) so a design made for one resolution
+        /// (e.g. 1920x1080) can be resized to another. Rects and sizes stay in design units. 1 = unscaled.
+        /// </summary>
+        public static float Scale
+        {
+            get => _scale;
+            set => _scale = float.IsNaN(value) ? 1f : Mathf.Clamp(value, MinScale, MaxScale);
+        }
+
         /// <summary>Receives warnings such as missing icons. Defaults to UnityEngine.Debug.LogWarning.</summary>
         public static Action<string> Warn = Debug.LogWarning;
 

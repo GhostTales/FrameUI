@@ -60,10 +60,28 @@ namespace FrameUI
         public void Render()
         {
             LastRenderFrame = Time.frameCount;
+
+            // Everything below works in design units; the matrix maps them to the screen and also converts the
+            // mouse position back, so dragging, resizing and clicks need no extra handling.
+            float scale = Gui.Scale;
+            var previousMatrix = GUI.matrix;
+            GUI.matrix = previousMatrix * Matrix4x4.Scale(new Vector3(scale, scale, 1f));
+            try
+            {
+                RenderScaled(Screen.width / scale, Screen.height / scale);
+            }
+            finally
+            {
+                GUI.matrix = previousMatrix;
+            }
+        }
+
+        void RenderScaled(float screenWidth, float screenHeight)
+        {
             Resize();
 
-            float maxWidth = Mathf.Max(_minimumSize.x, Screen.width);
-            float maxHeight = Mathf.Max(_minimumSize.y, Screen.height);
+            float maxWidth = Mathf.Max(_minimumSize.x, screenWidth);
+            float maxHeight = Mathf.Max(_minimumSize.y, screenHeight);
             Rect = new Rect(
                 Rect.x,
                 Rect.y,
@@ -76,8 +94,8 @@ namespace FrameUI
                 SetSize(AutoWidth ? fit.x : Rect.width, AutoHeight ? fit.y : Rect.height);
             }
             Rect = new Rect(
-                Mathf.Clamp(Rect.x, 0f, Mathf.Max(0f, Screen.width - ScreenMargin)),
-                Mathf.Clamp(Rect.y, 0f, Mathf.Max(0f, Screen.height - ScreenMargin)),
+                Mathf.Clamp(Rect.x, 0f, Mathf.Max(0f, screenWidth - ScreenMargin)),
+                Mathf.Clamp(Rect.y, 0f, Mathf.Max(0f, screenHeight - ScreenMargin)),
                 Rect.width,
                 Rect.height);
         }

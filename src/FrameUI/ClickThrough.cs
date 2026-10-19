@@ -32,7 +32,8 @@ namespace FrameUI
             get
             {
                 var mouse = Input.mousePosition;
-                var position = new Vector2(mouse.x, Screen.height - mouse.y);
+                // Window rects are in design units, so bring the pointer into them.
+                var position = new Vector2(mouse.x, Screen.height - mouse.y) / Gui.Scale;
                 for (int i = 0; i < Windows.Count; i++)
                     if (Windows[i].LastRenderFrame >= Time.frameCount - 1 && Windows[i].Contains(position)) return true;
                 return false;
