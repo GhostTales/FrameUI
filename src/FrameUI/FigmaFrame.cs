@@ -47,6 +47,8 @@ namespace FrameUI
         // Used when this frame is a child of an auto layout / grid frame.
         public FigmaSize WidthSize;
         public FigmaSize HeightSize;
+        public float MinWidth;             // Hug / Fill: content size never goes below this (Bounds is ignored when not Fixed)
+        public float MinHeight;
         public float FillWeight = 1f;      // stack: share among Fill siblings
         public int ColumnSpan = 1;         // grid
         public int RowSpan = 1;            // grid

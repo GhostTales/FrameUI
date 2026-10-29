@@ -14,7 +14,8 @@ namespace FrameUI
         Vector2 MeasureTree()
         {
             for (int i = 0; i < Children.Count; i++) Children[i].MeasureTree();
-            return _content = Measure();
+            var size = Measure();
+            return _content = new Vector2(Mathf.Max(size.x, MinWidth), Mathf.Max(size.y, MinHeight));
         }
 
         /// <summary>Content size of this frame. Children are already measured when this is called.</summary>
