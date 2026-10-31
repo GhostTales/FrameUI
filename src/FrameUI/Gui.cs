@@ -54,6 +54,46 @@ namespace FrameUI
             }
         }
 
+        static Action<Rect, Vector2, Vector2, bool> _pushClip;
+        static Action _popClip;
+        static bool _clipResolved;
+
+        // GUIClip is internal; this is the same call GUI.BeginScrollView makes.
+        static void ResolveClip()
+        {
+            _clipResolved = true;
+            try
+            {
+                var type = typeof(GUI).Assembly.GetType("UnityEngine.GUIClip");
+                var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+                var push = type?.GetMethod("Push", flags, null, new[] { typeof(Rect), typeof(Vector2), typeof(Vector2), typeof(bool) }, null);
+                var pop = type?.GetMethod("Pop", flags, null, Type.EmptyTypes, null);
+                if (push == null || pop == null) throw new MissingMethodException("UnityEngine.GUIClip.Push/Pop");
+                _pushClip = (Action<Rect, Vector2, Vector2, bool>)Delegate.CreateDelegate(typeof(Action<Rect, Vector2, Vector2, bool>), push);
+                _popClip = (Action)Delegate.CreateDelegate(typeof(Action), pop);
+            }
+            catch (Exception ex)
+            {
+                _pushClip = null;
+                _popClip = null;
+                Warn?.Invoke("FrameUI: clipping unavailable, scroll content will not be cut off: " + ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Clips drawing and mouse input to rect (in the current GUI coordinates) while keeping those coordinates
+        /// unchanged for whatever is drawn inside. Returns false if clipping is unavailable; otherwise pair with EndClip.
+        /// </summary>
+        public static bool BeginClip(Rect rect)
+        {
+            if (!_clipResolved) ResolveClip();
+            if (_pushClip == null) return false;
+            _pushClip(rect, -rect.position, Vector2.zero, false);
+            return true;
+        }
+
+        public static void EndClip() => _popClip?.Invoke();
+
         public static Color TextColor(Color c)
         {
             if (!LinearTextFix || QualitySettings.activeColorSpace != ColorSpace.Linear) return c;

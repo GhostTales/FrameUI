@@ -58,6 +58,11 @@ namespace FrameUI
         // Interaction. Any frame can be clickable / hoverable; the Hover*/Pressed* overrides fall back to the
         // previous state (Pressed -> Hover -> idle value). Tint multiplies the colours of this frame and all its
         // descendants, so a button can dim or brighten its whole content at once.
+        /// <summary>Clips the children to this frame's rectangle (they, and their input, are cut off outside it).</summary>
+        public bool ClipContent;
+        /// <summary>Moves the children up by this many units; together with ClipContent it makes a vertical scroll viewport.</summary>
+        public float ScrollY;
+
         public Action Clicked;
         public Action Hovered;             // called on every repaint while the pointer is over the frame
         public Color Tint = Color.white;
@@ -119,13 +124,16 @@ namespace FrameUI
         // Top-most frames (drawn last) see the event first and use it up, so they win over what is beneath them.
         void Dispatch(Event e)
         {
+            var outerClip = _clip;
+            if (ClipContent) _clip = Intersect(outerClip, LayoutRect);
             for (int i = Children.Count - 1; i >= 0; i--) Children[i].Dispatch(e);
+            _clip = outerClip;
             if (_controlId == 0) return;
 
             switch (e.type)
             {
                 case EventType.MouseDown:
-                    if (e.button == 0 && GUIUtility.hotControl == 0 && LayoutRect.Contains(e.mousePosition))
+                    if (e.button == 0 && GUIUtility.hotControl == 0 && LayoutRect.Contains(e.mousePosition) && InsideClip(e.mousePosition))
                     {
                         GUIUtility.hotControl = _controlId;
                         e.Use();
@@ -135,13 +143,27 @@ namespace FrameUI
                     if (GUIUtility.hotControl == _controlId)
                     {
                         GUIUtility.hotControl = 0;
-                        bool inside = LayoutRect.Contains(e.mousePosition);
+                        bool inside = LayoutRect.Contains(e.mousePosition) && InsideClip(e.mousePosition);
                         e.Use();
                         // A click is a press and a release on the same frame.
                         if (inside) Clicked();
                     }
                     break;
             }
+        }
+
+        // Visible area imposed by the clipping ancestors while dispatching / painting.
+        static Rect? _clip;
+
+        static bool InsideClip(Vector2 point) => !_clip.HasValue || _clip.Value.Contains(point);
+
+        static Rect Intersect(Rect? outer, Rect inner)
+        {
+            if (!outer.HasValue) return inner;
+            var o = outer.Value;
+            float xMin = Mathf.Max(o.xMin, inner.xMin), yMin = Mathf.Max(o.yMin, inner.yMin);
+            float xMax = Mathf.Min(o.xMax, inner.xMax), yMax = Mathf.Min(o.yMax, inner.yMax);
+            return new Rect(xMin, yMin, Mathf.Max(0f, xMax - xMin), Mathf.Max(0f, yMax - yMin));
         }
 
         bool OwnsControl(int id)
@@ -155,7 +177,7 @@ namespace FrameUI
         void UpdateState()
         {
             int hot = GUIUtility.hotControl;
-            bool inside = LayoutRect.Contains(Event.current.mousePosition);
+            bool inside = LayoutRect.Contains(Event.current.mousePosition) && InsideClip(Event.current.mousePosition);
             // While something else holds the mouse (window drag, scrollbar...) nothing else reacts to it.
             bool hover = inside && (hot == 0 || OwnsControl(hot));
             State = !hover ? FigmaState.Idle : _controlId != 0 && hot == _controlId ? FigmaState.Pressed : FigmaState.Hover;
@@ -181,7 +203,13 @@ namespace FrameUI
 
             Draw(LayoutRect, tint);
             if (Wireframe) Gui.Outline(LayoutRect, WireColor, 1f);
+
+            var outerClip = _clip;
+            bool clipped = ClipContent && Gui.BeginClip(LayoutRect);
+            if (ClipContent) _clip = Intersect(outerClip, LayoutRect);
             for (int i = 0; i < Children.Count; i++) Children[i].Paint(tint);
+            if (ClipContent) _clip = outerClip;
+            if (clipped) Gui.EndClip();
 
             if (State != FigmaState.Idle) Hovered?.Invoke();
         }

@@ -44,6 +44,7 @@ namespace FrameUI
         void PlaceAt(Rect rect)
         {
             LayoutRect = rect;
+            rect.y -= ScrollY;
             switch (Layout)
             {
                 case FigmaLayout.None:
