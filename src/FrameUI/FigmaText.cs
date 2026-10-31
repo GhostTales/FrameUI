@@ -19,9 +19,19 @@ namespace FrameUI
         // one GUIStyle per distinct look, and the measured size / letter-spacing pieces per (style, text).
         static readonly GUIContent Content = new GUIContent();
         static readonly Dictionary<StyleKey, GUIStyle> Styles = new Dictionary<StyleKey, GUIStyle>();
-        static readonly Dictionary<(GUIStyle, string), Vector2> Sizes = new Dictionary<(GUIStyle, string), Vector2>();
+        // Two generations: when the current one is full it becomes the previous one, so what was used recently
+        // survives a rollover and only texts that stopped being used are forgotten.
+        static Dictionary<(GUIStyle, string), Vector2> _sizes = new Dictionary<(GUIStyle, string), Vector2>();
+        static Dictionary<(GUIStyle, string), Vector2> _oldSizes = new Dictionary<(GUIStyle, string), Vector2>();
         static readonly Dictionary<(GUIStyle, string), PieceSet> PieceSets = new Dictionary<(GUIStyle, string), PieceSet>();
-        const int MaxCachedTexts = 4096;
+        const int MaxCachedTexts = 16384;
+
+        static GUIStyle _label;
+        static StyleKey _lastKey;
+        static GUIStyle _lastStyle;
+
+        // Reading GUI.skin is comparatively slow and every text asks for it once.
+        static GUIStyle LabelBase => _label ?? (_label = GUI.skin.label);
 
         readonly struct StyleKey : IEquatable<StyleKey>
         {
@@ -86,7 +96,11 @@ namespace FrameUI
                 if (_owned != null) return _resolved = Apply(_owned);
 
                 var key = new StyleKey(_baseStyle, _font, _fontSize, _align, _fontStyle, _wordWrap, _richText);
+                // Neighbouring texts nearly always share a look, so the last lookup is remembered.
+                if (_lastStyle != null && _lastKey.Equals(key)) return _resolved = _lastStyle;
                 if (!Styles.TryGetValue(key, out var style)) Styles[key] = style = Apply(new GUIStyle(_baseStyle));
+                _lastKey = key;
+                _lastStyle = style;
                 return _resolved = style;
             }
         }
@@ -119,7 +133,7 @@ namespace FrameUI
         public FigmaText(Rect bounds, string text, int fontSize, Color color, TextAnchor align = TextAnchor.UpperLeft) : base(bounds)
         {
             Text = text;
-            _baseStyle = GUI.skin.label;
+            _baseStyle = LabelBase;
             _font = DefaultFont ?? _baseStyle.font;
             _fontSize = fontSize;
             _align = align;
@@ -159,11 +173,21 @@ namespace FrameUI
                 if (ReferenceEquals(_measuredStyle, style) && ReferenceEquals(_measuredText, text)) return _measuredSize;
 
                 var key = (style, text);
-                if (!Sizes.TryGetValue(key, out var size))
+                if (!_sizes.TryGetValue(key, out var size))
                 {
-                    if (Sizes.Count >= MaxCachedTexts) Sizes.Clear();
-                    Content.text = text;
-                    Sizes[key] = size = style.CalcSize(Content);
+                    if (!_oldSizes.TryGetValue(key, out size))
+                    {
+                        Content.text = text;
+                        size = style.CalcSize(Content);
+                    }
+                    if (_sizes.Count >= MaxCachedTexts)
+                    {
+                        var recycled = _oldSizes;
+                        _oldSizes = _sizes;
+                        _sizes = recycled;
+                        _sizes.Clear();
+                    }
+                    _sizes[key] = size;
                 }
                 _measuredStyle = style;
                 _measuredText = text;

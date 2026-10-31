@@ -6,6 +6,7 @@ namespace FrameUI
     public partial class FigmaFrame
     {
         Vector2 _content;
+        float _main;   // main-axis size resolved by the parent stack while placing
 
         /// <summary>Size this frame needs to show its content (padding and gaps included). This is what Hug uses.</summary>
         public Vector2 ContentSize() => MeasureTree();
@@ -13,7 +14,7 @@ namespace FrameUI
         // Bottom-up, once per pass, so a frame is never measured more than once however deep the tree is.
         Vector2 MeasureTree()
         {
-            for (int i = 0; i < Children.Count; i++) Children[i].MeasureTree();
+            for (int i = 0; i < Kids.Count; i++) Kids[i].MeasureTree();
             var size = Measure();
             return _content = new Vector2(Mathf.Max(size.x, MinWidth), Mathf.Max(size.y, MinHeight));
         }
@@ -43,14 +44,35 @@ namespace FrameUI
         // Gives this frame its rectangle and places the children inside it.
         void PlaceAt(Rect rect)
         {
+            LayoutRect = rect;
+
+            // Nothing inside a frame that is entirely out of view (and whose content fits it, so nothing can overflow
+            // back into view) can be seen or clicked, so its descendants are left unplaced.
+            if (_placeView.HasValue && Kids.Count > 0 && !Overlaps(_placeView.Value, rect) && Fits(rect))
+            {
+                _visual = rect;
+                return;
+            }
+
+            var outerView = _placeView;
+            if (ClipContent && outerView.HasValue) _placeView = Intersect(outerView, rect);
+
             PlaceChildren(rect);
+
+            _placeView = outerView;
 
             // Area this frame and its descendants can paint in; a clipping frame hides whatever overflows it.
             var visual = rect;
             if (!ClipContent)
-                for (int i = 0; i < Children.Count; i++) visual = Union(visual, Children[i]._visual);
+                for (int i = 0; i < Kids.Count; i++) visual = Union(visual, Kids[i]._visual);
             _visual = visual;
         }
+
+        // Stack and grid layouts keep their children inside the content size, so they overflow only if it exceeds the rect.
+        bool Fits(Rect rect) =>
+            Layout != FigmaLayout.None && !ClipContent && _content.x <= rect.width + 0.01f && _content.y <= rect.height + 0.01f;
+
+        static Rect? _placeView;
 
         Rect _visual;
 
@@ -61,24 +83,22 @@ namespace FrameUI
 
         void PlaceChildren(Rect rect)
         {
-            LayoutRect = rect;
             rect.y -= ScrollY;
             switch (Layout)
             {
                 case FigmaLayout.None:
-                    for (int i = 0; i < Children.Count; i++)
+                    for (int i = 0; i < Kids.Count; i++)
                     {
-                        var c = Children[i];
+                        var c = Kids[i];
                         c.PlaceAt(new Rect(rect.x + c.Bounds.x, rect.y + c.Bounds.y, c.Bounds.width, c.Bounds.height));
                     }
                     break;
                 case FigmaLayout.Grid:
                     var cells = LayoutGrid(rect);
-                    for (int i = 0; i < Children.Count; i++) Children[i].PlaceAt(cells[i]);
+                    for (int i = 0; i < Kids.Count; i++) Kids[i].PlaceAt(cells[i]);
                     break;
                 default:
-                    var rects = LayoutStack(rect);
-                    for (int i = 0; i < Children.Count; i++) Children[i].PlaceAt(rects[i]);
+                    PlaceStack(rect);
                     break;
             }
         }
@@ -88,32 +108,32 @@ namespace FrameUI
         Vector2 MeasureStack()
         {
             bool horizontal = Layout == FigmaLayout.Horizontal;
-            float main = Gap * Mathf.Max(0, Children.Count - 1);
+            float main = Gap * Mathf.Max(0, Kids.Count - 1);
             float cross = 0f;
-            for (int i = 0; i < Children.Count; i++)
+            for (int i = 0; i < Kids.Count; i++)
             {
-                main += Children[i].Intrinsic(horizontal);
-                cross = Mathf.Max(cross, Children[i].Intrinsic(!horizontal));
+                main += Kids[i].Intrinsic(horizontal);
+                cross = Mathf.Max(cross, Kids[i].Intrinsic(!horizontal));
             }
             return horizontal
                 ? new Vector2(main + Padding.x + Padding.z, cross + Padding.y + Padding.w)
                 : new Vector2(cross + Padding.x + Padding.z, main + Padding.y + Padding.w);
         }
 
-        Rect[] LayoutStack(Rect rect)
+        // Children are placed as they are positioned; their resolved main-axis size is kept on the child itself.
+        void PlaceStack(Rect rect)
         {
             bool horizontal = Layout == FigmaLayout.Horizontal;
             float mainSize = horizontal ? InnerWidth(rect) : InnerHeight(rect);
             float crossSize = horizontal ? InnerHeight(rect) : InnerWidth(rect);
 
-            int n = Children.Count;
-            var main = new float[n];
+            int n = Kids.Count;
             float used = 0f, weights = 0f;
             for (int i = 0; i < n; i++)
             {
-                var c = Children[i];
+                var c = Kids[i];
                 if ((horizontal ? c.WidthSize : c.HeightSize) == FigmaSize.Fill) weights += Mathf.Max(0f, c.FillWeight);
-                else used += main[i] = c.Intrinsic(horizontal);
+                else used += c._main = c.Intrinsic(horizontal);
             }
 
             float free = Mathf.Max(0f, mainSize - used - Gap * Mathf.Max(0, n - 1));
@@ -121,9 +141,9 @@ namespace FrameUI
             {
                 for (int i = 0; i < n; i++)
                 {
-                    var c = Children[i];
+                    var c = Kids[i];
                     if ((horizontal ? c.WidthSize : c.HeightSize) == FigmaSize.Fill)
-                        main[i] = free * Mathf.Max(0f, c.FillWeight) / weights;
+                        c._main = free * Mathf.Max(0f, c.FillWeight) / weights;
                 }
                 free = 0f;
             }
@@ -136,23 +156,22 @@ namespace FrameUI
                 case FigmaAlign.SpaceBetween: if (n > 1) gap += free / (n - 1); break;
             }
 
-            var rects = new Rect[n];
             float x = rect.x + Padding.x, y = rect.y + Padding.y;
             for (int i = 0; i < n; i++)
             {
-                var c = Children[i];
+                var c = Kids[i];
                 bool crossFill = (horizontal ? c.HeightSize : c.WidthSize) == FigmaSize.Fill;
                 float cross = crossFill ? crossSize : c.Intrinsic(!horizontal);
                 float crossPos = 0f;
                 if (CrossAlign == FigmaAlign.Center) crossPos = (crossSize - cross) * 0.5f;
                 else if (CrossAlign == FigmaAlign.End) crossPos = crossSize - cross;
 
-                rects[i] = horizontal
-                    ? new Rect(x + pos, y + crossPos, main[i], cross)
-                    : new Rect(x + crossPos, y + pos, cross, main[i]);
-                pos += main[i] + gap;
+                float main = c._main;
+                c.PlaceAt(horizontal
+                    ? new Rect(x + pos, y + crossPos, main, cross)
+                    : new Rect(x + crossPos, y + pos, cross, main));
+                pos += main + gap;
             }
-            return rects;
         }
 
         // ---- Grid ----
@@ -162,15 +181,15 @@ namespace FrameUI
         // Row-major auto placement; returns per child (col, row, colSpan, rowSpan).
         Vector4[] PlaceCells(out int rowCount)
         {
-            int cols = ColumnCount, n = Children.Count;
+            int cols = ColumnCount, n = Kids.Count;
             var cells = new Vector4[n];
             var occupied = new List<bool[]>();
             int cursor = 0;
             rowCount = RowTracks != null ? RowTracks.Length : 0;
             for (int i = 0; i < n; i++)
             {
-                int cs = Mathf.Clamp(Children[i].ColumnSpan, 1, cols);
-                int rs = Mathf.Max(1, Children[i].RowSpan);
+                int cs = Mathf.Clamp(Kids[i].ColumnSpan, 1, cols);
+                int rs = Mathf.Max(1, Kids[i].RowSpan);
                 while (cursor % cols + cs > cols || !IsFree(occupied, cursor % cols, cursor / cols, cs, rs)) cursor++;
                 int c0 = cursor % cols, r0 = cursor / cols;
                 for (int r = r0; r < r0 + rs; r++)
@@ -204,7 +223,7 @@ namespace FrameUI
             {
                 int start = (int)(horizontal ? cells[i].x : cells[i].y);
                 float span = horizontal ? cells[i].z : cells[i].w;
-                if (span == 1f) content[start] = Mathf.Max(content[start], Children[i].Intrinsic(horizontal));
+                if (span == 1f) content[start] = Mathf.Max(content[start], Kids[i].Intrinsic(horizontal));
             }
 
             var sizes = new float[count];
@@ -256,7 +275,7 @@ namespace FrameUI
                 float cellW = colX[c0 + cs - 1] + colW[c0 + cs - 1] - colX[c0];
                 float cellH = rowY[r0 + rs - 1] + rowH[r0 + rs - 1] - rowY[r0];
 
-                var child = Children[i];
+                var child = Kids[i];
                 float w = child.WidthSize == FigmaSize.Fill ? cellW : child.Intrinsic(true);
                 float h = child.HeightSize == FigmaSize.Fill ? cellH : child.Intrinsic(false);
                 rects[i] = new Rect(

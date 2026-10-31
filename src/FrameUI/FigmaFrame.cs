@@ -20,8 +20,6 @@ namespace FrameUI
         public Rect Bounds; // left, top, width, height
         public Color? Fill;
         public Color? Border;
-        /// <summary>Per-side colour overrides; a side left null uses Border.</summary>
-        public Color? BorderLeft, BorderTop, BorderRight, BorderBottom;
         public Vector4 BorderWidths;       // left, top, right, bottom
         public Vector4 CornerRadii;        // top-left, top-right, bottom-right, bottom-left
 
@@ -66,9 +64,29 @@ namespace FrameUI
         public Action Clicked;
         public Action Hovered;             // called on every repaint while the pointer is over the frame
         public Color Tint = Color.white;
-        public Color? HoverTint, PressedTint;
-        public Color? HoverFill, PressedFill;
-        public Color? HoverBorder, PressedBorder;
+
+        // Rarely used colour overrides live in a separate object that is only created when one is set, so the
+        // thousands of plain frames a big list creates per event stay small.
+        sealed class Overrides
+        {
+            public Color? BorderLeft, BorderTop, BorderRight, BorderBottom;
+            public Color? HoverTint, PressedTint, HoverFill, PressedFill, HoverBorder, PressedBorder;
+        }
+
+        Overrides _overrides;
+        Overrides Ov => _overrides ?? (_overrides = new Overrides());
+
+        /// <summary>Per-side colour overrides; a side left null uses Border.</summary>
+        public Color? BorderLeft { get => _overrides?.BorderLeft; set { if (value.HasValue || _overrides != null) Ov.BorderLeft = value; } }
+        public Color? BorderTop { get => _overrides?.BorderTop; set { if (value.HasValue || _overrides != null) Ov.BorderTop = value; } }
+        public Color? BorderRight { get => _overrides?.BorderRight; set { if (value.HasValue || _overrides != null) Ov.BorderRight = value; } }
+        public Color? BorderBottom { get => _overrides?.BorderBottom; set { if (value.HasValue || _overrides != null) Ov.BorderBottom = value; } }
+        public Color? HoverTint { get => _overrides?.HoverTint; set { if (value.HasValue || _overrides != null) Ov.HoverTint = value; } }
+        public Color? PressedTint { get => _overrides?.PressedTint; set { if (value.HasValue || _overrides != null) Ov.PressedTint = value; } }
+        public Color? HoverFill { get => _overrides?.HoverFill; set { if (value.HasValue || _overrides != null) Ov.HoverFill = value; } }
+        public Color? PressedFill { get => _overrides?.PressedFill; set { if (value.HasValue || _overrides != null) Ov.PressedFill = value; } }
+        public Color? HoverBorder { get => _overrides?.HoverBorder; set { if (value.HasValue || _overrides != null) Ov.HoverBorder = value; } }
+        public Color? PressedBorder { get => _overrides?.PressedBorder; set { if (value.HasValue || _overrides != null) Ov.PressedBorder = value; } }
 
         /// <summary>Pointer state, updated on every repaint. Pressed requires the frame to be clickable.</summary>
         public FigmaState State { get; private set; }
@@ -76,7 +94,14 @@ namespace FrameUI
         /// <summary>Position and size resolved by the last Render, in the coordinates of the surrounding GUI.</summary>
         public Rect LayoutRect { get; private set; }
 
-        public readonly List<FigmaFrame> Children = new List<FigmaFrame>();
+        static readonly List<FigmaFrame> NoChildren = new List<FigmaFrame>();
+        List<FigmaFrame> _children;
+
+        /// <summary>The child frames. The list is created on first use, so leaf frames don't pay for one.</summary>
+        public List<FigmaFrame> Children => _children ?? (_children = new List<FigmaFrame>());
+
+        // Read-only view for the engine itself; never hand it out or add to it.
+        List<FigmaFrame> Kids => _children ?? NoChildren;
 
         int _controlId;
 
@@ -104,14 +129,28 @@ namespace FrameUI
             Arrange(parent);
             AssignControls();
 
-            if (e.isMouse) Dispatch(e);
-            if (e.type != EventType.Repaint) return;
-
             var outerView = _view;
             _view = CullOffscreen ? parent : (Rect?)null;
-            try { Paint(Color.white); }
+            try
+            {
+                if (e.isMouse)
+                {
+                    // While something holds the mouse, its release must still reach it even if it was scrolled out of view.
+                    _cullInput = e.type == EventType.MouseDown || GUIUtility.hotControl == 0;
+                    Dispatch(e);
+                }
+                if (e.type != EventType.Repaint) return;
+
+                _mouse = e.mousePosition;
+                _hot = GUIUtility.hotControl;
+                Paint(Color.white);
+            }
             finally { _view = outerView; }
         }
+
+        static bool _cullInput;
+        static Vector2 _mouse;
+        static int _hot;
 
         /// <summary>
         /// On the frame passed to Render: skips painting descendants that lie completely outside parent (which is
@@ -126,14 +165,16 @@ namespace FrameUI
         internal void Arrange(Rect parent)
         {
             MeasureTree();
-            PlaceAt(new Rect(parent.x + Bounds.x, parent.y + Bounds.y, Bounds.width, Bounds.height));
+            _placeView = CullOffscreen ? parent : (Rect?)null;
+            try { PlaceAt(new Rect(parent.x + Bounds.x, parent.y + Bounds.y, Bounds.width, Bounds.height)); }
+            finally { _placeView = null; }
         }
 
         // Control ids must be requested in the same order on every event, so they are handed out in tree order.
         void AssignControls()
         {
             _controlId = Clicked != null ? GUIUtility.GetControlID(ControlHint, FocusType.Passive) : 0;
-            for (int i = 0; i < Children.Count; i++) Children[i].AssignControls();
+            for (int i = 0; i < Kids.Count; i++) Kids[i].AssignControls();
         }
 
         // ---- Input ----
@@ -143,7 +184,12 @@ namespace FrameUI
         {
             var outerClip = _clip;
             if (ClipContent) _clip = Intersect(outerClip, LayoutRect);
-            for (int i = Children.Count - 1; i >= 0; i--) Children[i].Dispatch(e);
+            for (int i = Kids.Count - 1; i >= 0; i--)
+            {
+                var child = Kids[i];
+                if (_cullInput && !child.IsVisible()) continue;
+                child.Dispatch(e);
+            }
             _clip = outerClip;
             if (_controlId == 0) return;
 
@@ -186,15 +232,15 @@ namespace FrameUI
         bool OwnsControl(int id)
         {
             if (_controlId == id) return true;
-            for (int i = 0; i < Children.Count; i++)
-                if (Children[i].OwnsControl(id)) return true;
+            for (int i = 0; i < Kids.Count; i++)
+                if (Kids[i].OwnsControl(id)) return true;
             return false;
         }
 
         void UpdateState()
         {
-            int hot = GUIUtility.hotControl;
-            bool inside = LayoutRect.Contains(Event.current.mousePosition) && InsideClip(Event.current.mousePosition);
+            int hot = _hot;
+            bool inside = LayoutRect.Contains(_mouse) && InsideClip(_mouse);
             // While something else holds the mouse (window drag, scrollbar...) nothing else reacts to it.
             bool hover = inside && (hot == 0 || OwnsControl(hot));
             State = !hover ? FigmaState.Idle : _controlId != 0 && hot == _controlId ? FigmaState.Pressed : FigmaState.Hover;
@@ -231,9 +277,9 @@ namespace FrameUI
             var outerClip = _clip;
             bool clipped = ClipContent && Gui.BeginClip(LayoutRect);
             if (ClipContent) _clip = Intersect(outerClip, LayoutRect);
-            for (int i = 0; i < Children.Count; i++)
+            for (int i = 0; i < Kids.Count; i++)
             {
-                var child = Children[i];
+                var child = Kids[i];
                 if (!child.IsVisible()) continue;
                 child.Paint(tint);
             }
