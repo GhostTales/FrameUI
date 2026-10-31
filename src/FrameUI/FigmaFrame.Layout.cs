@@ -43,6 +43,24 @@ namespace FrameUI
         // Gives this frame its rectangle and places the children inside it.
         void PlaceAt(Rect rect)
         {
+            PlaceChildren(rect);
+
+            // Area this frame and its descendants can paint in; a clipping frame hides whatever overflows it.
+            var visual = rect;
+            if (!ClipContent)
+                for (int i = 0; i < Children.Count; i++) visual = Union(visual, Children[i]._visual);
+            _visual = visual;
+        }
+
+        Rect _visual;
+
+        static Rect Union(Rect a, Rect b) =>
+            Rect.MinMaxRect(Mathf.Min(a.xMin, b.xMin), Mathf.Min(a.yMin, b.yMin), Mathf.Max(a.xMax, b.xMax), Mathf.Max(a.yMax, b.yMax));
+
+        static bool Overlaps(Rect a, Rect b) => a.xMin < b.xMax && b.xMin < a.xMax && a.yMin < b.yMax && b.yMin < a.yMax;
+
+        void PlaceChildren(Rect rect)
+        {
             LayoutRect = rect;
             rect.y -= ScrollY;
             switch (Layout)

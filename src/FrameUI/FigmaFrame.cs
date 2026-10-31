@@ -97,13 +97,30 @@ namespace FrameUI
         /// </summary>
         public void Render(Rect parent)
         {
+            // Other events (scroll wheel, keys, Used...) neither paint nor hit-test frames, so skip the layout work.
+            var e = Event.current;
+            if (e.type != EventType.Layout && e.type != EventType.Repaint && !e.isMouse) return;
+
             Arrange(parent);
             AssignControls();
 
-            var e = Event.current;
             if (e.isMouse) Dispatch(e);
-            if (e.type == EventType.Repaint) Paint(Color.white);
+            if (e.type != EventType.Repaint) return;
+
+            var outerView = _view;
+            _view = CullOffscreen ? parent : (Rect?)null;
+            try { Paint(Color.white); }
+            finally { _view = outerView; }
         }
+
+        /// <summary>
+        /// On the frame passed to Render: skips painting descendants that lie completely outside parent (which is
+        /// normally the window, so they would be clipped anyway). Keeps long lists cheap. Skipped frames don't
+        /// update their State or call Hovered. Descendants of a ClipContent frame are likewise skipped outside it.
+        /// </summary>
+        public bool CullOffscreen = true;
+
+        static Rect? _view;
 
         // Measures and places the whole tree without touching IMGUI.
         internal void Arrange(Rect parent)
@@ -196,6 +213,13 @@ namespace FrameUI
 
         // ---- Painting ----
 
+        // False when nothing of this subtree can show inside the clipping ancestors / the rendered area.
+        bool IsVisible()
+        {
+            if (_view.HasValue && !Overlaps(_view.Value, _visual)) return false;
+            return !_clip.HasValue || Overlaps(_clip.Value, _visual);
+        }
+
         void Paint(Color inherited)
         {
             UpdateState();
@@ -207,7 +231,12 @@ namespace FrameUI
             var outerClip = _clip;
             bool clipped = ClipContent && Gui.BeginClip(LayoutRect);
             if (ClipContent) _clip = Intersect(outerClip, LayoutRect);
-            for (int i = 0; i < Children.Count; i++) Children[i].Paint(tint);
+            for (int i = 0; i < Children.Count; i++)
+            {
+                var child = Children[i];
+                if (!child.IsVisible()) continue;
+                child.Paint(tint);
+            }
             if (ClipContent) _clip = outerClip;
             if (clipped) Gui.EndClip();
 
