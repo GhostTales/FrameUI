@@ -85,6 +85,22 @@ namespace FrameUI
         public bool WordWrap { get => _wordWrap; set { _wordWrap = value; Invalidate(); } }
         /// <summary>Enables &lt;b&gt;, &lt;i&gt;, Gui.Colored(...) spans and &lt;cspace=0.3em&gt;...&lt;/cspace&gt; letter spacing (em or px) inside Text.</summary>
         public bool RichText { get => _richText; set { _richText = value; Invalidate(); } }
+        /// <summary>
+        /// Height in pixels of each line's box, like Figma's line height. Defaults to FontSize (100%); the glyphs are
+        /// centred vertically inside it. Set to 0 to use the font's natural height including style padding.
+        /// </summary>
+        public float LineHeight { get => _lineHeight ?? _fontSize; set => _lineHeight = value; }
+        float? _lineHeight;
+
+        float LineBoxHeight
+        {
+            get
+            {
+                int lines = 1;
+                if (Text != null) foreach (char c in Text) if (c == '\n') lines++;
+                return LineHeight * lines;
+            }
+        }
 
         void Invalidate() => _resolved = null;
 
@@ -158,6 +174,13 @@ namespace FrameUI
         bool HasSpacing => _richText && Text != null && Text.IndexOf("<cspace", StringComparison.OrdinalIgnoreCase) >= 0;
 
         protected override Vector2 Measure()
+        {
+            var size = MeasureNatural();
+            if (LineHeight > 0f) size.y = LineBoxHeight;
+            return size;
+        }
+
+        Vector2 MeasureNatural()
         {
             var style = Style;
             if (!HasSpacing)
@@ -268,6 +291,20 @@ namespace FrameUI
             set.Pieces.Add(new Piece { Markup = Content.text, Width = size.x, Spacing = spacing });
         }
 
+        // Places the LineHeight box in rect by the vertical alignment, then returns the natural text box centred in it,
+        // so the glyphs keep their usual position relative to each other and may overhang a tight line box.
+        Rect LineBox(Rect rect, GUIStyle style)
+        {
+            float natural = MeasureNatural().y;
+            float box = LineBoxHeight;
+            float y = rect.y;
+            var a = style.alignment;
+            if (a >= TextAnchor.LowerLeft) y += rect.height - box;
+            else if (a >= TextAnchor.MiddleLeft) y += (rect.height - box) * 0.5f;
+            y += (box - natural) * 0.5f;
+            return new Rect(rect.x, y, rect.width, natural);
+        }
+
         static float ParseSpacing(string value, float em)
         {
             value = value.Trim().Trim('"');
@@ -282,6 +319,7 @@ namespace FrameUI
             base.Draw(rect, tint);
             var style = Style;
             style.normal.textColor = Gui.TextColor(_color) * tint;
+            if (LineHeight > 0f) rect = LineBox(rect, style);
             if (!HasSpacing)
             {
                 Content.text = Text ?? "";
