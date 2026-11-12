@@ -30,10 +30,23 @@ namespace FrameUI
 
         // Auto layout (mirrors Figma's panel). Layout.None keeps absolute Bounds positioning.
         public FigmaLayout Layout;
-        public Vector4 Padding;            // left, top, right, bottom
-        public float Gap;                  // Horizontal / Vertical
-        public FigmaAlign MainAlign;       // Horizontal / Vertical: distribution along the direction
-        public FigmaAlign CrossAlign;      // Horizontal / Vertical: placement across (SpaceBetween = Start)
+        /// <summary>
+        /// The padding inside the frame, applied to its content.
+        /// The order of the values is left, top, right, bottom.
+        /// </summary>
+        public Vector4 Padding;
+        /// <summary>
+        /// The gap between child elements in the layout, either horizontal or vertical depending on the layout direction.
+        /// </summary>
+        public float Gap; 
+        /// <summary>
+        /// The main alignment of the children along the layout direction.
+        /// </summary>
+        public FigmaAlign MainAlign;
+        /// <summary>
+        /// The cross alignment of the children perpendicular to the layout direction.
+        /// </summary>
+        public FigmaAlign CrossAlign;
 
         // Grid. Tracks beyond the defined ones default to 1fr; if ColumnTracks is empty, Columns x 1fr is used.
         public int Columns = 1;
