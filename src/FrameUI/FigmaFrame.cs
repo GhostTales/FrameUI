@@ -17,10 +17,22 @@ namespace FrameUI
         /// <summary>Debug view: every frame is drawn as an outline instead of its fill/border.</summary>
         public static bool Wireframe;
 
+        /// <summary>
+        /// The rectangle defining the position and size of the frame.
+        /// The order of the values is left, top, right, bottom.
+        /// Note that the width and height are derived from right - left and bottom - top.
+        /// </summary>
         public Rect Bounds; // left, top, width, height
         public Color? Fill;
         public Color? Border;
+        /// <summary>
+        /// The widths of the frame's borders on each side.
+        /// The order of the values is left, top, right, bottom.
+        /// </summary>
         public Vector4 BorderWidths;       // left, top, right, bottom
+        /// <summary>
+        /// The order of the values is top-left, top-right, bottom-right, bottom-left.
+        /// </summary>
         public Vector4 CornerRadii;        // top-left, top-right, bottom-right, bottom-left
 
         /// <summary>Uniform shorthand that sets all four border widths.</summary>
